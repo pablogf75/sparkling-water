@@ -18,7 +18,7 @@
 package org.apache.spark.h2o.converters
 
 
-import org.apache.spark.h2o.H2OConf
+import org.apache.spark.h2o.SparklingEnv
 import org.apache.spark.h2o.utils.ReflectionUtils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{Partition, SparkContext, TaskContext}
@@ -40,7 +40,7 @@ class H2ORDD[A <: Product: TypeTag: ClassTag, T <: Frame] private(@transient val
                                                                   val colNames: Array[String])
                                                                  (@transient sc: SparkContext)
   extends {
-    override val isExternalBackend = H2OConf(sc).runsInExternalClusterMode
+    override val isExternalBackend = SparklingEnv.getConf.runsInExternalClusterMode
   } with RDD[A](sc, Nil) with H2ORDDLike[T] {
 
   // Get column names before building an RDD
@@ -60,7 +60,8 @@ class H2ORDD[A <: Product: TypeTag: ClassTag, T <: Frame] private(@transient val
   /** Number of columns in the full dataset */
   val numCols = frame.numCols()
   val types = ReflectionUtils.types[A](colNames)
-  val expectedTypesAll: Option[Array[Byte]] = ConverterUtils.prepareExpectedTypes(isExternalBackend, types)
+  override val expectedTypes: Option[Array[Byte]] = ConverterUtils.prepareExpectedTypes(isExternalBackend, types)
+
 
   /**
    * :: DeveloperApi ::
@@ -82,15 +83,7 @@ class H2ORDD[A <: Product: TypeTag: ClassTag, T <: Frame] private(@transient val
 
       override val keyName = frameKeyName
       override val partIndex = split.index
-      val expectedTypes: Option[Array[Byte]] = expectedTypesAll
-
-      /* Converter context */
-      override val converterCtx: ReadConverterContext =
-      ConverterUtils.getReadConverterContext(isExternalBackend,
-        keyName,
-        chksLocation,
-        expectedTypes,
-        partIndex)
+      override val selectedColumnIndices: Array[Int] = types.indices.toArray
 
       def next(): A = {
         val data = new Array[Option[Any]](numCols)
@@ -112,6 +105,7 @@ class H2ORDD[A <: Product: TypeTag: ClassTag, T <: Frame] private(@transient val
         // Create instance for the extracted row
         ccr.newInstance(data:_*).asInstanceOf[A]
       }
+
     }
 
     ConverterUtils.getIterator[A](isExternalBackend, iterator)

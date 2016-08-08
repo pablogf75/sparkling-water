@@ -20,8 +20,8 @@ package org.apache.spark.h2o.backends.internal
 import org.apache.spark.Logging
 import org.apache.spark.h2o.backends.SparklingBackend
 import org.apache.spark.h2o.utils.NodeDesc
-import org.apache.spark.h2o.{H2OConf, H2OContext}
-import org.apache.spark.listeners.{ExecutorAddNotSupportedListener}
+import org.apache.spark.h2o.{H2OConf, H2OContext, SparklingEnv}
+import org.apache.spark.listeners.ExecutorAddNotSupportedListener
 import water.api.RestAPIManager
 import water.{H2O, H2OStarter}
 
@@ -57,6 +57,7 @@ class InternalH2OBackend(@transient val hc: H2OContext) extends SparklingBackend
     }
 
     checkUnsupportedSparkOptions(InternalH2OBackend.UNSUPPORTED_SPARK_OPTIONS, conf)
+    SparklingEnv.setConf(conf)
     conf
   }
 
