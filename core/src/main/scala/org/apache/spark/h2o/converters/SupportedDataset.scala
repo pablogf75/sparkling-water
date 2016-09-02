@@ -17,6 +17,7 @@
 
 package org.apache.spark.h2o.converters
 
+import org.apache.spark.h2o.utils.Reflection
 import org.apache.spark.{TaskContext, SparkContext}
 import org.apache.spark.h2o._
 import org.apache.spark.sql.SQLContext
@@ -128,32 +129,16 @@ object SupportedDataset {
       buildH2OFrame(kn, meta.vecTypes, res)
     }
 
-
-    private def inferFieldType(value : Any): Class[_] ={
-      value match {
-        case n: Byte  => classOf[java.lang.Byte]
-        case n: Short => classOf[java.lang.Short]
-        case n: Int => classOf[java.lang.Integer]
-        case n: Long => classOf[java.lang.Long]
-        case n: Float => classOf[java.lang.Float]
-        case n: Double => classOf[java.lang.Double]
-        case n: Boolean => classOf[java.lang.Boolean]
-        case n: String => classOf[java.lang.String]
-        case n: java.sql.Timestamp => classOf[java.sql.Timestamp]
-        case q => throw new IllegalArgumentException(s"Do not understand type $q")
-      }
-    }
-
     import org.apache.spark.h2o.utils.H2OTypeUtils._
+
+    import Reflection._
 
     def metaInfo(fieldNames: Int => String): MetaInfo = {
       val first = rdd.first()
       val fnames: Array[String] = (0 until first.productArity map fieldNames).toArray[String]
 
-      val ftypes = first.productIterator map inferFieldType
-
       // Collect H2O vector types for all input types
-      val vecTypes:Array[Byte] = ftypes map dataTypeToVecType toArray
+      val vecTypes:Array[Byte] = first.productIterator map (typeSpecOf(_).vecType) toArray
 
       MetaInfo(fnames, vecTypes)
     }

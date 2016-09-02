@@ -16,20 +16,33 @@
 */
 package org.apache.spark.h2o.utils
 
+import water.fvec.Vec
+
 /**
  * Utilities to work with types and allows conversion from/to h2o types
  *
  */
-// TODO(Vlad): movve it all to Reflection.
-object H2OTypeUtils {
+object OldH2OTypeUtils {
+  val dataTypeToVecType = Map[Class[_], Byte](
+  classOf[java.lang.Byte] -> Vec.T_NUM,
+  classOf[java.lang.Short] -> Vec.T_NUM,
+  classOf[java.lang.Integer] -> Vec.T_NUM,
+  classOf[java.lang.Long] -> Vec.T_NUM,
+  classOf[java.lang.Float] -> Vec.T_NUM,
+  classOf[java.lang.Double] -> Vec.T_NUM,
+  classOf[java.lang.Boolean] -> Vec.T_NUM,
+  classOf[java.lang.String] -> Vec.T_STR,
+  classOf[java.sql.Timestamp] -> Vec.T_TIME
+  ).withDefault(q => throw new IllegalArgumentException(s"Do not understand type $q"))
 
-  def dataTypeToVecType(t: Class[_]): Byte = Reflection.ClassMap(t)
+//  def dataTypeToVecType(t: Class[_]): Byte = ClassMap(t)
 
   import ReflectionUtils._
 
   import scala.reflect.runtime.universe._
 
-  def dataTypeToVecType(t: Type): Byte = dataTypeToVecType(typ(t))
+  def dataTypeToVecType(t: Type): Byte = {
+    dataTypeToVecType(typ(t))
 
-  def vecTypeOf[T](implicit ttag: TypeTag[T]) = dataTypeToVecType(typeOf[T])
+  }
 }

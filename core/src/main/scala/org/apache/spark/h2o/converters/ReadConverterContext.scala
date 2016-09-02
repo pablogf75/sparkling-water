@@ -52,9 +52,14 @@ trait ReadConverterContext {
   def getDouble(columnNum: Int): Option[Double]
   def getString(columnNum: Int): Option[String]
 
-  private type Getter = Int => Option[Any]
+  def numRows: Int
+  def increaseRowIdx() = rowIdx += 1
 
-  val get: DataType => Getter = Map[DataType, Getter](
+  def hasNext = rowIdx < numRows
+
+  type OptionReader = Int => Option[Any]
+
+  val ReaderPerType: DataType => OptionReader = Map[DataType, OptionReader](
     ByteType -> getByte,
     ShortType -> getShort,
     IntegerType -> getInt,
@@ -66,9 +71,17 @@ trait ReadConverterContext {
     TimestampType -> getTimestamp
   ) withDefault (t => throw new scala.IllegalArgumentException(s"Type $t not supported for conversion from H2OFrame to Spark's Dataframe"))
 
-  def getNullable(dataType: DataType): (Int => Any) = (i: Int) => get(dataType)(i) orNull
+  protected type TypeName = String
+  protected type Reader = Int => Any
 
-  def numRows: Int
-  def increaseRowIdx() = rowIdx += 1
-  def hasNext = rowIdx < numRows
+  val readerMap: Map[TypeName, Reader]
+
+  /**
+    * For a given array of source column indexes and required data types,
+    * produces an array of value providers.
+    *
+    * @param columnIndexesWithTypes lists which columns we need, and what are the required types
+    * @return an array of value providers. Each provider gives the current column value
+    */
+  def columnValueProviders(columnIndexesWithTypes: Array[(Int, DataType)]): Array[() => Option[Any]]
 }
