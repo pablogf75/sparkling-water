@@ -19,12 +19,13 @@ package org.apache.spark.h2o.converters
 
 import org.apache.spark._
 import org.apache.spark.h2o.H2OContext
-import org.apache.spark.h2o.utils.{H2OSchemaUtils, NodeDesc}
+import org.apache.spark.h2o.utils.{ReflectionUtils, H2OSchemaUtils, NodeDesc}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, H2OFrameRelation, Row, SQLContext}
 import water.fvec.{Frame, H2OFrame}
 
 import scala.collection.immutable
+import ReflectionUtils._
 
 trait SparkDataFrameConverter extends Logging with ConverterUtils {
 
@@ -60,7 +61,7 @@ trait SparkDataFrameConverter extends Logging with ConverterUtils {
     val vecTypes = flatRddSchema.indices
       .map(idx => {
         val f = flatRddSchema(idx)
-        dataTypeToVecType(f._2.dataType)
+        vecTypeFor(f._2.dataType)
       }).toArray
 
     convert[Row](hc, dfRdd, keyName, fnames, vecTypes, perSQLPartition(flatRddSchema))
@@ -103,7 +104,7 @@ trait SparkDataFrameConverter extends Logging with ConverterUtils {
         var i = 0
         var subRow = row
         while (i < path.length - 1 && !subRow.isNullAt(path(i))) {
-          subRow = subRow.getAs[Row](path(i));
+          subRow = subRow.getAs[Row](path(i))
           i += 1
         }
         val aidx = path(i) // actual index into row provided by path
@@ -135,11 +136,11 @@ trait SparkDataFrameConverter extends Logging with ConverterUtils {
                 subRow.getDouble(aidx)
               }
             })
-            case StringType => {
+            case StringType =>
               val sv = if (isAry) ary(aryIdx).asInstanceOf[String] else subRow.getString(aidx)
               // Always produce string vectors
               con.put(idx, sv)
-            }
+
             case TimestampType => con.put(idx, subRow.getAs[java.sql.Timestamp](aidx))
             case _ => con.putNA(idx)
           }

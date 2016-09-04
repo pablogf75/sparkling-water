@@ -49,7 +49,7 @@ class H2ORDD[A <: Product: TypeTag: ClassTag, T <: Frame] private(@transient val
 
   // Get column names before building an RDD
   def this(@transient fr : T)
-          (@transient sc: SparkContext) = this(fr, ReflectionUtils.names[A])(sc)
+          (@transient sc: SparkContext) = this(fr, ReflectionUtils.fieldNames[A])(sc)
 
   // Check that H2OFrame & given Scala type are compatible
   if (colNamesInResult.length > 1) {
@@ -93,7 +93,7 @@ class H2ORDD[A <: Product: TypeTag: ClassTag, T <: Frame] private(@transient val
   }
   // maps data columns to product components
   val columnMapping: Array[Int] =
-    if (columnTypeNames.size == 1) Array(0) else multicolumnMapping
+    if (columnTypeNames.length == 1) Array(0) else multicolumnMapping
 
   def multicolumnMapping: Array[Int] = {
     try {

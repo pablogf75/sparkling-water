@@ -17,10 +17,11 @@
 
 package org.apache.spark.h2o.converters
 
-import org.apache.spark.h2o.utils.Reflection
-import org.apache.spark.{TaskContext, SparkContext}
 import org.apache.spark.h2o._
+import org.apache.spark.h2o.utils.SupportedTypes.SupportedType
+import org.apache.spark.h2o.utils._
 import org.apache.spark.sql.SQLContext
+import org.apache.spark.{SparkContext, TaskContext}
 import water.Key
 import water.parser.BufferedString
 
@@ -76,9 +77,10 @@ object SupportedDataset {
     }
   }
 
-  case class MetaInfo(names:Array[String], vecTypes: Array[Byte]) {
+  case class MetaInfo(names:Array[String], types: Array[SupportedType[_]]) {
     require(names.length > 0, "Empty meta info does not make sense")
-    require(names.length == vecTypes.length, s"Different lengths: ${names.length} names, ${vecTypes.length} types")
+    require(names.length == types.length, s"Different lengths: ${names.length} names, ${types.length} types")
+    lazy val vecTypes: Array[Byte] = types map (_.vecType)
   }
 
   case class ProductFrameBuilder(sc: SparkContext, rdd: RDD[Product], frameKeyName: Option[String]) {
@@ -129,23 +131,18 @@ object SupportedDataset {
       buildH2OFrame(kn, meta.vecTypes, res)
     }
 
-    import org.apache.spark.h2o.utils.H2OTypeUtils._
-
-    import Reflection._
+    import ReflectionUtils._
 
     def metaInfo(fieldNames: Int => String): MetaInfo = {
       val first = rdd.first()
       val fnames: Array[String] = (0 until first.productArity map fieldNames).toArray[String]
 
-      // Collect H2O vector types for all input types
-      val vecTypes:Array[Byte] = first.productIterator map (typeSpecOf(_).vecType) toArray
-
-      MetaInfo(fnames, vecTypes)
+      MetaInfo(fnames, memberTypes(first))
     }
 
     def metaInfo(tuples: List[(String, Type)]): MetaInfo = {
       val names = tuples map (_._1) toArray
-      val vecTypes = tuples map (nt => dataTypeToVecType(nt._2)) toArray
+      val vecTypes = tuples map (nt => supportedTypeFor(nt._2)) toArray
 
       MetaInfo(names, vecTypes)
     }

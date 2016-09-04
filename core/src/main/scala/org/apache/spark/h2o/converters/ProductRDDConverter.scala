@@ -18,15 +18,15 @@
 package org.apache.spark.h2o.converters
 
 import org.apache.spark.h2o._
-import org.apache.spark.h2o.utils.{H2OTypeUtils, NodeDesc, Reflection, ReflectionUtils}
+import org.apache.spark.h2o.utils.NodeDesc
+import org.apache.spark.h2o.utils.ReflectionUtils._
 import org.apache.spark.{Logging, TaskContext}
 import water.Key
 
 import scala.collection.immutable
-import scala.language.implicitConversions
+import scala.language.{implicitConversions, postfixOps}
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe._
-import Reflection._
 
 private[h2o] object ProductRDDConverter extends Logging with ConverterUtils{
 
@@ -44,23 +44,21 @@ private[h2o] object ProductRDDConverter extends Logging with ConverterUtils{
     val first = rdd.first()
     val fnames = 0.until(first.productArity).map(idx => "f" + idx).toArray[String]
 
-    val vecTypes = first.productIterator map (typeSpecOf(_).vecType) toArray
+    val vecTypes = memberTypes(first) map (_.vecType)
 
     convert[Product](hc, rdd, keyName, fnames, vecTypes, perTypedRDDPartition())
   }
 
   /** Transform typed RDD into H2O Frame */
   def toH2OFrame[T <: Product : TypeTag](hc: H2OContext, rdd: RDD[T], frameKeyName: Option[String]) : H2OFrame = {
-    import H2OTypeUtils._
-    import ReflectionUtils._
 
     val keyName = frameKeyName.getOrElse("frame_rdd_" + rdd.id + Key.rand()) // There are uniq IDs for RDD
 
-    val fnames = names[T]
+    val fnames = fieldNames[T]
     val ftypes = types[T](fnames)
 
     // Collect H2O vector types for all input types
-    val vecTypes = ftypes map dataTypeToVecType toArray
+    val vecTypes = ftypes map vecTypeFor
 
     convert[T](hc, rdd, keyName, fnames, vecTypes, perTypedRDDPartition())
   }

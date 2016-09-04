@@ -39,7 +39,7 @@ class InternalReadConverterContext(override val keyName: String, override val ch
 
   private def get[T](columnNum: Int, read: Chunk => T): Option[T] = {
     for {
-      chunk <- Option(chks(columnNum)) if (!chunk.isNA(rowIdx))
+      chunk <- Option(chks(columnNum)) if !chunk.isNA(rowIdx)
       data <- Option(read(chunk))
     } yield data
   }
@@ -124,7 +124,7 @@ class InternalReadConverterContext(override val keyName: String, override val ch
   def columnValueProviders(columnIndexesWithTypes: Array[(Int, DataType)]): Array[() => Option[Any]] = {
     for {
       (i, ft) <- columnIndexesWithTypes
-      provider = () => ReaderPerType(ft)(i)
+      provider = () => readerFor(ft)(i)
     } yield provider
   }
 }

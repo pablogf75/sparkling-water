@@ -14,22 +14,18 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-package org.apache.spark.h2o.utils
+package org.apache.spark.serializer
+
+import org.scalatest.Assertions
 
 /**
- * Utilities to work with types and allows conversion from/to h2o types
- *
- */
-// TODO(Vlad): movve it all to Reflection.
-object H2OTypeUtils {
+  * Use this to check if your class/object is serializable
+  */
+object Serializability extends Assertions {
+  import SerializationDebugger._
 
-  def dataTypeToVecType(t: Class[_]): Byte = Reflection.ClassMap(t)
-
-  import ReflectionUtils._
-
-  import scala.reflect.runtime.universe._
-
-  def dataTypeToVecType(t: Type): Byte = dataTypeToVecType(typ(t))
-
-  def vecTypeOf[T](implicit ttag: TypeTag[T]) = dataTypeToVecType(typeOf[T])
+  def check(obj: Object) = {
+    val found = find(obj)
+    assert(found.isEmpty)
+  }
 }

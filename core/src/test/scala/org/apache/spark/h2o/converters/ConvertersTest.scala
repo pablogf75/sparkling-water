@@ -19,10 +19,10 @@ package org.apache.spark.h2o.converters
 import java.util.UUID
 
 import org.apache.spark.SparkContext
+import org.apache.spark.h2o._
+import org.apache.spark.h2o.testdata._
 import org.apache.spark.h2o.utils.H2OSchemaUtils.flatSchema
-import org.apache.spark.h2o.utils.TestData._
 import org.apache.spark.h2o.utils._
-import org.apache.spark.h2o.{IntHolder, RDD}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row}
 import org.junit.runner.RunWith
@@ -329,9 +329,5 @@ println("--------1-------")
         }, "values stored has to match to values in rdd")
     }
   }
-}
-
-object ConvertersTestSuite {
-
 }
 

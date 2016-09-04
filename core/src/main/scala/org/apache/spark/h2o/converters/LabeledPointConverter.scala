@@ -26,6 +26,7 @@ import water.fvec.{H2OFrame, Vec}
 
 import scala.collection.immutable
 import scala.language.implicitConversions
+import language.postfixOps
 
 private[converters] object LabeledPointConverter extends Logging with ConverterUtils{
 
@@ -43,8 +44,8 @@ private[converters] object LabeledPointConverter extends Logging with ConverterU
       // Features vectors of different sizes, filling missing with n/a
       logWarning("WARNING: Converting RDD[LabeledPoint] to H2OFrame where features vectors have different size, filling missing with n/a")
     }
-    val fnames = (Seq[String]("label") ++ 0.until(maxNumFeatures).map(num => "feature" + num).toSeq).toArray[String]
-    val vecTypes = Array.fill(maxNumFeatures+1)(Vec.T_NUM)
+    val fnames = ("label" :: 0.until(maxNumFeatures).map("feature" +).toList).toArray[String]
+    val vecTypes = Array.fill(maxNumFeatures + 1)(Vec.T_NUM)
 
     convert[LabeledPoint](hc, rdd, keyName, fnames, vecTypes, perLabeledPointRDDPartition(maxNumFeatures))
   }

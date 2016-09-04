@@ -17,6 +17,7 @@
 
 package org.apache.spark.h2o.converters
 
+import org.apache.spark.h2o.utils.SupportedTypes
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -59,17 +60,22 @@ trait ReadConverterContext {
 
   type OptionReader = Int => Option[Any]
 
-  val ReaderPerType: DataType => OptionReader = Map[DataType, OptionReader](
-    ByteType -> getByte,
-    ShortType -> getShort,
-    IntegerType -> getInt,
-    LongType -> getLong,
-    FloatType -> getFloat,
-    DoubleType -> getDouble,
-    BooleanType -> getBoolean,
-    StringType -> getUTF8String,
-    TimestampType -> getTimestamp
+  import SupportedTypes._
+
+  val ReaderPerType = Map[SupportedType[_], OptionReader](
+    Byte -> getByte,
+    Short -> getShort,
+    Integer -> getInt,
+    Long -> getLong,
+    Float -> getFloat,
+    Double -> getDouble,
+    Boolean -> getBoolean,
+    String -> getUTF8String,
+    UTF8 -> getUTF8String,
+    Timestamp -> getTimestamp
   ) withDefault (t => throw new scala.IllegalArgumentException(s"Type $t not supported for conversion from H2OFrame to Spark's Dataframe"))
+
+  def readerFor(dt: DataType): OptionReader = ReaderPerType(SparkIndex(dt))
 
   protected type TypeName = String
   protected type Reader = Int => Any
