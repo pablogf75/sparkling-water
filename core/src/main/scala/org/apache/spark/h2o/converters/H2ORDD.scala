@@ -29,6 +29,7 @@ import water.fvec.Frame
 import scala.language.postfixOps
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe._
+import ReflectionUtils._
 
 /**
   * Convert H2OFrame into an RDD (lazily).
@@ -49,7 +50,7 @@ class H2ORDD[A <: Product: TypeTag: ClassTag, T <: Frame] private(@transient val
 
   // Get column names before building an RDD
   def this(@transient fr : T)
-          (@transient sc: SparkContext) = this(fr, ReflectionUtils.fieldNames[A])(sc)
+          (@transient sc: SparkContext) = this(fr, fieldNamesOf[A])(sc)
 
   // Check that H2OFrame & given Scala type are compatible
   if (colNamesInResult.length > 1) {
@@ -66,8 +67,10 @@ class H2ORDD[A <: Product: TypeTag: ClassTag, T <: Frame] private(@transient val
 
   val colNamesInFrame = frame.names()
 
-  val types = ReflectionUtils.types[A](colNamesInResult)
-  val expectedTypesAll: Option[Array[Byte]] = ConverterUtils.prepareExpectedTypes(isExternalBackend, types)
+  // the following two lines are for some future development;
+  // they can as well be uncommented when needed
+//  val types = ReflectionUtils.types[A](colNamesInResult)
+//  val expectedTypesAll: Option[Array[Byte]] = ConverterUtils.prepareExpectedTypes(isExternalBackend, types)
 
   /**
    * :: DeveloperApi ::
@@ -78,7 +81,10 @@ class H2ORDD[A <: Product: TypeTag: ClassTag, T <: Frame] private(@transient val
     ConverterUtils.getIterator[A](isExternalBackend, iterator)
   }
 
-  private val columnTypeNames = ReflectionUtils.typeNames[A](colNamesInResult).toArray
+  /**
+    * Names of types are used to refer the readers, which are indexed by types
+    */
+  private lazy val columnTypeNames = typeNamesOf[A](colNamesInResult)
 
   private val jc = implicitly[ClassTag[A]].runtimeClass
 
@@ -122,7 +128,9 @@ class H2ORDD[A <: Product: TypeTag: ClassTag, T <: Frame] private(@transient val
 
     private val convertPerColumn: Array[() => AnyRef] =
       (columnMapping zip readers) map
-        { case (j, r) => () => r(j).asInstanceOf[AnyRef]} // this last trick converts primitives to java.lang wrappers
+        { case (j, r) => () =>
+          r.apply(j).asInstanceOf[AnyRef]  // this last trick converts primitives to java.lang wrappers
+        }
 
     def extractRow: Array[AnyRef] = {
       val rowOpt = convertPerColumn map (_())

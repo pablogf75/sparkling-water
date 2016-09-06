@@ -37,15 +37,22 @@ class InternalReadConverterContext(override val keyName: String, override val ch
 
   override def isNA(columnNum: Int): Boolean = chks(columnNum).isNA(rowIdx)
 
-  private def get[T](columnNum: Int, read: Chunk => T): Option[T] = {
+  private def getOption[T](read: Chunk => T)(columnNum: Int): Option[T] = {
     for {
       chunk <- Option(chks(columnNum)) if !chunk.isNA(rowIdx)
       data <- Option(read(chunk))
     } yield data
   }
 
-  override def getLong(columnNum: Int): Option[Long] =  get(columnNum, _.at8(rowIdx))
-  override def getDouble(columnNum: Int): Option[Double] = get(columnNum, _.atd(rowIdx))
+  private def getSimple[T](defaultValue: T, read: Chunk => T)(columnNum: Int): T = {
+    val chunk = chks(columnNum)
+    if (chunk.isNA(rowIdx)) defaultValue else read(chunk)
+  }
+
+  override def getLong(columnNum: Int): Option[Long] = {
+    getOption(_.at8(rowIdx))(columnNum)
+  }
+  override def getDouble(columnNum: Int): Option[Double] = getOption(_.atd(rowIdx))(columnNum)
 
   private def categoricalString(chunk: Chunk) = chunk.vec().domain()(chunk.at8(rowIdx).toInt)
 
@@ -66,14 +73,13 @@ class InternalReadConverterContext(override val keyName: String, override val ch
 
   private def stringProvider(columnNum: Int): (Chunk => String) = StringProviders(fr.vec(columnNum).get_type())
 
-
-  override def getString(columnNum: Int): Option[String] = get(columnNum, stringProvider(columnNum))
+  override def getString(columnNum: Int): Option[String] = getOption(stringProvider(columnNum))(columnNum)
 
   private def underlyingFrame = DKV.get(Key.make(keyName)).get.asInstanceOf[Frame]
 
   override def numRows: Int = nrows
 
-  private val DefaultReader: Reader = _ => None
+  private val DefaultReader: Reader = Reader("DEFAULT", (_:Int) => None)
 
   /**
     * Given a a column number, returns an Option[T]
@@ -82,7 +88,7 @@ class InternalReadConverterContext(override val keyName: String, override val ch
     *
     * A map from type name to option reader
     */
-  lazy val OptionReaders: Map[TypeName, OptionReader] = Map(
+  lazy val OptionReaders: Map[TypeName, Int => Option[Any]] = Map(
     "Boolean"    -> getBoolean,
     "Byte"       -> getByte,
     "Double"     -> getDouble,
@@ -111,9 +117,11 @@ class InternalReadConverterContext(override val keyName: String, override val ch
     "Timestamp" -> 0L
   )
 
-  private def twoReaders = (key: TypeName, op: OptionReader) =>
-    List((s"Option[$key]":TypeName) -> op,
-      key                        -> ((col: Int) => op(col).getOrElse(Defaults(key)))
+  private def twoReaders = (key: TypeName, op: Int => Option[Any]) =>
+    List((s"Option[$key]":TypeName) -> Reader(s"Option[$key]":TypeName, op),
+      key                            -> Reader(key, (col: Int) => {
+        op.apply(col).getOrElse(Defaults(key))
+      })
     )
 
   private lazy val availableReaders: Map[TypeName, Reader] =
@@ -124,7 +132,7 @@ class InternalReadConverterContext(override val keyName: String, override val ch
   def columnValueProviders(columnIndexesWithTypes: Array[(Int, DataType)]): Array[() => Option[Any]] = {
     for {
       (i, ft) <- columnIndexesWithTypes
-      provider = () => readerFor(ft)(i)
+      provider = () => readerFor(ft).apply(i)
     } yield provider
   }
 }

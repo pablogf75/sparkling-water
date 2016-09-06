@@ -54,11 +54,8 @@ private[h2o] object ProductRDDConverter extends Logging with ConverterUtils{
 
     val keyName = frameKeyName.getOrElse("frame_rdd_" + rdd.id + Key.rand()) // There are uniq IDs for RDD
 
-    val fnames = fieldNames[T]
-    val ftypes = types[T](fnames)
-
-    // Collect H2O vector types for all input types
-    val vecTypes = ftypes map vecTypeFor
+    val fnames = fieldNamesOf[T]
+    val vecTypes = vecTypesOf[T]
 
     convert[T](hc, rdd, keyName, fnames, vecTypes, perTypedRDDPartition())
   }

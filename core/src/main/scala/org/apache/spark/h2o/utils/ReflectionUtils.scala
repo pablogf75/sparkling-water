@@ -29,20 +29,20 @@ import language.postfixOps
 object ReflectionUtils {
   import scala.reflect.runtime.universe._
 
-  def fieldNames[T: TypeTag] : Array[String] = {
+  def fieldNamesOf[T: TypeTag] : Array[String] = {
     typeOf[T].members.sorted.collect { case m if !m.isMethod => m.name.toString.trim }.toArray
   }
 
-  def types[T: TypeTag](filter: Array[String]) : Array[Class[_]] = types(typeOf[T], filter)
+  def vecTypesOf[T:TypeTag]: Array[VecType] = memberClassesOf[T] map vecTypeFor
 
-  def types[T: TypeTag] : Array[Class[_]] = types(typeOf[T], new Array[String](0))
-
-  def types(st: `Type`, nameFilter: Array[String]): Array[Class[_]] = {
+  def memberClassesOf[T](implicit ttag: TypeTag[T]): Array[Class[_]] = {
+    val st = typeOf[T]
+    val nameFilter = fieldNamesOf[T]
     val attr = listMemberTypes(st, nameFilter)
-    types(attr)
+    classesOf(attr)
   }
 
-  def listMemberTypes(st: `Type`, nameFilter: Array[String]): Seq[`Type`] = {
+  def listMemberTypes(st: Type, nameFilter: Array[String]): Seq[Type] = {
     val formalTypeArgs = st.typeSymbol.asClass.typeParams
     val TypeRef(_, _, actualTypeArgs) = st
     val attr = st.members.sorted
@@ -54,23 +54,27 @@ object ReflectionUtils {
     attr
   }
 
-  def nameType(t: `Type`): String = {
+  private def typeName(t: Type): String = {
     val name = classFor(t).getSimpleName
     if (t <:< typeOf[Option[_]]) s"Option[$name]" else name
   }
 
-  def typeNames[T: TypeTag](nameFilter: Array[String]): Seq[String] = {
-    val st: `Type` = typeOf[T]
-    val attr = listMemberTypes(st, nameFilter)
-    typeNames(attr)
+  def typeNamesOf[T: TypeTag](nameFilter: Array[String]): Array[String] = {
+    val types: Seq[Type] = listMemberTypes(typeOf[T], nameFilter)
+    nameTheseTypes(types)
   }
 
-  def typeNames(tt: Seq[`Type`]) : Seq[String] = {
-    tt map nameType
+  private def nameTheseTypes(tt: Seq[Type]) : Array[String] = {
+    tt map typeName toArray
   }
 
-  def types(tt: Seq[`Type`]) : Array[Class[_]] = {
+  private def classesOf(tt: Seq[Type]) : Array[Class[_]] = {
     (tt map classFor).toArray
+  }
+
+  def supportdTypesOf[T: TypeTag](nameFilter: Array[String]): Array[SupportedType] = {
+    val types: Seq[Type] = listMemberTypes(typeOf[T], nameFilter)
+    types map supportedTypeFor toArray
   }
 
   def reflector(ref: AnyRef) = new {
@@ -91,7 +95,7 @@ object ReflectionUtils {
 
   import scala.reflect.runtime.universe._
 
-  def supportedTypeOf(value : Any): SupportedType[_] = {
+  def supportedTypeOf(value : Any): SupportedType = {
     value match {
       case n: Byte => Byte
       case n: Short => Short
@@ -106,7 +110,7 @@ object ReflectionUtils {
     }
   }
 
-  def supportedTypeFor(tpe: Type) : SupportedType[_] = {
+  def supportedTypeFor(tpe: Type) : SupportedType = {
     if (tpe <:< typeOf[Option[_]]) {
       val TypeRef(_, _, Seq(optType)) = tpe
       supportedTypeFor(optType)
@@ -133,8 +137,8 @@ object ReflectionUtils {
   /**
     * Return catalyst structural type for given H2O vector.
     *
-    * The mapping of type is flat, if type is unrecognized
-    * {@link IllegalArgumentException} is thrown.
+    * The mapping of type is flat.
+    * @throws IllegalArgumentException if type is recognized
     *
     * @param v H2O vector
     * @return catalyst data type
@@ -143,7 +147,7 @@ object ReflectionUtils {
 
   def memberTypes(p: Product) = p.productIterator map supportedTypeOf toArray
 
-  def supportedType(v: Vec): SupportedType[_] = {
+  def supportedType(v: Vec): SupportedType = {
     v.get_type() match {
       case Vec.T_BAD  => Byte // vector is full of NAs, use any type
       case Vec.T_NUM  => detectSupportedNumericType(v)
@@ -155,7 +159,7 @@ object ReflectionUtils {
     }
   }
 
-  private def detectSupportedNumericType(v: Vec): SupportedType[_] = {
+  private def detectSupportedNumericType(v: Vec): SupportedType = {
     if (v.isInt) {
       val min = v.min()
       val max = v.max()

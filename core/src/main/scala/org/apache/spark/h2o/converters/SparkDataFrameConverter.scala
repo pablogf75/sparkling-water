@@ -58,11 +58,7 @@ trait SparkDataFrameConverter extends Logging with ConverterUtils {
     // Patch the flat schema based on information about types
     val fnames = flatRddSchema.map(t => t._2.name).toArray
     // Transform datatype into h2o types
-    val vecTypes = flatRddSchema.indices
-      .map(idx => {
-        val f = flatRddSchema(idx)
-        vecTypeFor(f._2.dataType)
-      }).toArray
+    val vecTypes = flatRddSchema.map(f => vecTypeFor(f._2.dataType)).toArray
 
     convert[Row](hc, dfRdd, keyName, fnames, vecTypes, perSQLPartition(flatRddSchema))
   }

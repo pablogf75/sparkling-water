@@ -48,7 +48,7 @@ class SupportedTypesTest extends FunSuite {
 
   // TODO(vlad): move to ReflectionUtilsTest
   test("Infer type from a value") {
-    def mustBe[T](expected: SupportedType[T], value: T) = assert(supportedTypeOf(value) == expected)
+    def mustBe[T](expected: SupportedType, value: T) = assert(supportedTypeOf(value) == expected)
 
     mustBe(Boolean, true)
     mustBe(Boolean, false)
@@ -87,7 +87,7 @@ class SupportedTypesTest extends FunSuite {
   test("Infer type from scala type") {
     import scala.reflect.runtime.universe.definitions._
 
-    def mustBe[T](expected: SupportedType[T], t: Type) = assert(ReflectionUtils.supportedTypeFor(t) == expected)
+    def mustBe[T](expected: SupportedType, t: Type) = assert(ReflectionUtils.supportedTypeFor(t) == expected)
 
     mustBe(Boolean, BooleanTpe)
     mustBe(Boolean, typeOf[scala.Boolean])

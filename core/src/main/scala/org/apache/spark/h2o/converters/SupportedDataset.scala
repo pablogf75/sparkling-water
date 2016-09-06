@@ -77,7 +77,7 @@ object SupportedDataset {
     }
   }
 
-  case class MetaInfo(names:Array[String], types: Array[SupportedType[_]]) {
+  case class MetaInfo(names:Array[String], types: Array[SupportedType]) {
     require(names.length > 0, "Empty meta info does not make sense")
     require(names.length == types.length, s"Different lengths: ${names.length} names, ${types.length} types")
     lazy val vecTypes: Array[Byte] = types map (_.vecType)

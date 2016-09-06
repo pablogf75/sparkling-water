@@ -58,11 +58,14 @@ trait ReadConverterContext {
 
   def hasNext = rowIdx < numRows
 
-  type OptionReader = Int => Option[Any]
+  case class OptionReader(name: Any, apply: Int => Option[Any]) {
+  }
+
+//  type OptionReader = Int => Option[Any]
 
   import SupportedTypes._
 
-  val ReaderPerType = Map[SupportedType[_], OptionReader](
+  val ReaderPerType = Map[SupportedType, Int => Option[Any]](
     Byte -> getByte,
     Short -> getShort,
     Integer -> getInt,
@@ -75,10 +78,10 @@ trait ReadConverterContext {
     Timestamp -> getTimestamp
   ) withDefault (t => throw new scala.IllegalArgumentException(s"Type $t not supported for conversion from H2OFrame to Spark's Dataframe"))
 
-  def readerFor(dt: DataType): OptionReader = ReaderPerType(SparkIndex(dt))
+  def readerFor(dt: DataType): OptionReader = OptionReader(SparkIndex(dt), ReaderPerType(SparkIndex(dt)))
 
   protected type TypeName = String
-  protected type Reader = Int => Any
+  case class Reader(name: Any, apply: Int => Any)
 
   val readerMap: Map[TypeName, Reader]
 
