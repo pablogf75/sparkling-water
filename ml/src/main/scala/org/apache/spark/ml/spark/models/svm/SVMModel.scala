@@ -16,8 +16,11 @@
  */
 package org.apache.spark.ml.spark.models.svm
 
+import java.lang
+
 import hex.ModelMetricsSupervised.MetricBuilderSupervised
 import hex._
+import org.apache.spark.ml.spark.models.MissingValuesHandling
 import water.codegen.CodeGeneratorPipeline
 import water.util.{JCodeGen, SBPrintStream}
 import water.{H2O, Key, Keyed}
@@ -28,6 +31,7 @@ object SVMModel {
     var interceptor: Double = .0
     var iterations: Int = 0
     var weights: Array[Double] = null
+    var numMeans: Array[Double] = null
   }
 
 }
@@ -49,8 +53,15 @@ class SVMModel private[svm](val selfKey: Key[_ <: Keyed[_ <: Keyed[_ <: AnyRef]]
 
   protected def score0(data: Array[Double], preds: Array[Double]): Array[Double] = {
     java.util.Arrays.fill(preds, 0)
+
     val pred =
-      data.zip(_output.weights).foldRight(_output.interceptor){ case ((d, w), acc) => d * w + acc}
+      data.zip(_output.weights).foldRight(_output.interceptor){ case ((d, w), acc) => {
+        if(MissingValuesHandling.MeanImputation.eq(_parms._missing_values_handling) && lang.Double.isNaN(d)) {
+          _output.numMeans(0) * w + acc
+        } else {
+          d * w + acc
+        }
+      }}
 
     if(_parms._threshold.isNaN) { // Regression
       preds(0) = pred

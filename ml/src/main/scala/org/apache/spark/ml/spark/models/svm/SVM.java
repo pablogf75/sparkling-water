@@ -18,22 +18,19 @@ package org.apache.spark.ml.spark.models.svm;
 
 import hex.*;
 
-import org.apache.spark.api.java.function.Function;
 import org.apache.spark.SparkContext;
 import org.apache.spark.h2o.H2OContext;
+import org.apache.spark.ml.FrameMLUtils;
+import org.apache.spark.ml.spark.models.MissingValuesHandling;
 import org.apache.spark.ml.spark.models.svm.SVMModel.SVMOutput;
 import org.apache.spark.mllib.classification.SVMWithSGD;
 import org.apache.spark.mllib.linalg.Vector;
 import org.apache.spark.mllib.linalg.Vectors;
 import org.apache.spark.mllib.regression.LabeledPoint;
 import org.apache.spark.rdd.RDD;
-import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
 import water.DKV;
 import water.fvec.Frame;
-import water.fvec.H2OFrame;
 import water.fvec.Vec;
 import water.util.Log;
 
@@ -95,11 +92,13 @@ public class SVM extends ModelBuilder<SVMModel, SVMParameters, SVMOutput> {
             }
         }
 
-        for (int i = 0; i < _train.numCols(); i++) {
-            Vec vec = _train.vec(i);
-            String vecName = _train.name(i);
-            if (vec.naCnt() > 0 && (null == _parms._ignored_columns || Arrays.binarySearch(_parms._ignored_columns, vecName) < 0)) {
-                error("_train", "Training frame cannot contain any missing values [" + vecName + "].");
+        if(MissingValuesHandling.NotAllowed.equals(_parms._missing_values_handling)) {
+            for (int i = 0; i < _train.numCols(); i++) {
+                Vec vec = _train.vec(i);
+                String vecName = _train.name(i);
+                if (vec.naCnt() > 0 && (null == _parms._ignored_columns || Arrays.binarySearch(_parms._ignored_columns, vecName) < 0)) {
+                    error("_train", "Training frame cannot contain any missing values [" + vecName + "].");
+                }
             }
         }
 
@@ -109,7 +108,7 @@ public class SVM extends ModelBuilder<SVMModel, SVMParameters, SVMOutput> {
         for (int i = 0; i < _train.vecs().length; i++) {
             Vec vec = _train.vec(i);
             if (!ignoredCols.contains(_train.name(i)) && !(vec.isNumeric() || vec.isCategorical())) {
-                error("_train", "SVM supports only frames with numeric values (except for result column). But a " + vec.get_type_str() + " was found.");
+                error("_train", "SVM supports only frames with numeric/categorical values (except for result column). But a " + vec.get_type_str() + " was found.");
             }
         }
 
@@ -169,10 +168,15 @@ public class SVM extends ModelBuilder<SVMModel, SVMParameters, SVMOutput> {
             SVMModel model = new SVMModel(dest(), _parms, new SVMModel.SVMOutput(SVM.this));
             model.delete_and_lock(_job);
 
-            RDD<LabeledPoint> training = getTrainingData(
+            double[] means = new double[model._output.nfeatures()];
+            RDD<LabeledPoint> training = FrameMLUtils.toLabeledPoints(
                     _train,
                     _parms._response_column,
-                    model._output.nfeatures()
+                    model._output.nfeatures(),
+                    means,
+                    _parms._missing_values_handling,
+                    h2oContext,
+                    sqlContext
             );
             training.cache();
 
@@ -197,6 +201,8 @@ public class SVM extends ModelBuilder<SVMModel, SVMParameters, SVMOutput> {
             model._output.weights_$eq(trainedModel.weights().toArray());
             model._output.iterations_$eq(_parms._max_iterations);
             model._output.interceptor_$eq(trainedModel.intercept());
+
+            model._output.numMeans_$eq(means);
 
             Frame train = DKV.<Frame>getGet(_parms._train);
             model.score(train).delete();
@@ -225,61 +231,5 @@ public class SVM extends ModelBuilder<SVMModel, SVMParameters, SVMOutput> {
             }
             return Vectors.dense(dense);
         }
-
-        private RDD<LabeledPoint> getTrainingData(Frame parms, String _response_column, int nfeatures) {
-            return h2oContext.asDataFrame(new H2OFrame(parms), true, sqlContext)
-                    .javaRDD()
-                    .map(new RowToLabeledPoint(nfeatures, _response_column, parms.domains())).rdd();
-        }
     }
 }
-
-class RowToLabeledPoint implements Function<Row, LabeledPoint> {
-    private final int nfeatures;
-    private final String _response_column;
-    private final String[][] domains;
-
-    RowToLabeledPoint(int nfeatures, String response_column, String[][] domains) {
-        this.nfeatures = nfeatures;
-        this._response_column = response_column;
-        this.domains = domains;
-    }
-
-    @Override
-    public LabeledPoint call(Row row) throws Exception {
-        StructField[] fields = row.schema().fields();
-        double[] features = new double[nfeatures];
-        for (int i = 0; i < nfeatures; i++) {
-            features[i] = toDouble(row.get(i), fields[i], domains[i]);
-        }
-
-        return new LabeledPoint(
-                toDouble(row.<String>getAs(_response_column), fields[fields.length - 1], domains[domains.length - 1]),
-                Vectors.dense(features));
-    }
-
-    private double toDouble(Object value, StructField fieldStruct, String[] domain) {
-        if (fieldStruct.dataType().sameType(DataTypes.ByteType)) {
-            return ((Byte) value).doubleValue();
-        }
-
-        if (fieldStruct.dataType().sameType(DataTypes.ShortType)) {
-            return ((Short) value).doubleValue();
-        }
-
-        if (fieldStruct.dataType().sameType(DataTypes.IntegerType)) {
-            return ((Integer) value).doubleValue();
-        }
-
-        if (fieldStruct.dataType().sameType(DataTypes.DoubleType)) {
-            return (Double) value;
-        }
-
-        if (fieldStruct.dataType().sameType(DataTypes.StringType)) {
-            return Arrays.binarySearch(domain, value);
-        }
-
-        throw new IllegalArgumentException("Target column has to be an enum or a number. " + fieldStruct.toString());
-    }
-}
-
