@@ -33,16 +33,15 @@ object ReflectionUtils {
     typeOf[T].members.sorted.collect { case m if !m.isMethod => m.name.toString.trim }.toArray
   }
 
-  def vecTypesOf[T:TypeTag]: Array[VecType] = memberClassesOf[T] map vecTypeFor
+  def vecTypesOf[T:TypeTag]: Array[VecType] = memberTypesOf[T] map (_.vecType)
 
-  def memberClassesOf[T](implicit ttag: TypeTag[T]): Array[Class[_]] = {
+  def memberTypesOf[T](implicit ttag: TypeTag[T]): Array[SupportedType] = {
     val st = typeOf[T]
     val nameFilter = fieldNamesOf[T]
-    val attr = listMemberTypes(st, nameFilter)
-    classesOf(attr)
+    supportedTypesOf[T](nameFilter)
   }
 
-  def listMemberTypes(st: Type, nameFilter: Array[String]): Seq[Type] = {
+  def listMemberTypes(st: Type, nameFilter: Array[String]): Array[Type] = {
     val formalTypeArgs = st.typeSymbol.asClass.typeParams
     val TypeRef(_, _, actualTypeArgs) = st
     val attr = st.members.sorted
@@ -51,7 +50,7 @@ object ReflectionUtils {
       .map( s =>
         s.typeSignature.substituteTypes(formalTypeArgs, actualTypeArgs)
       )
-    attr
+    attr toArray
   }
 
   private def typeName(t: Type): String = {
@@ -72,7 +71,7 @@ object ReflectionUtils {
     (tt map classFor).toArray
   }
 
-  def supportdTypesOf[T: TypeTag](nameFilter: Array[String]): Array[SupportedType] = {
+  def supportedTypesOf[T: TypeTag](nameFilter: Array[String]): Array[SupportedType] = {
     val types: Seq[Type] = listMemberTypes(typeOf[T], nameFilter)
     types map supportedTypeFor toArray
   }

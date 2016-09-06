@@ -37,13 +37,17 @@ object SupportedTypes extends Enumeration {
     def matches(t: Type): Boolean
   }
 
-  final case class SimpleType[T](
+  final case class SimpleType[T : TypeTag](
                                 vecType  : VecType,
                                 sparkType: DataType,
                                 javaClass: Class[_], // note, not always T, since T is scala class
-                                types    : Type*
+                                defaultValue: T,
+                                private val extraTypes : Type*
       ) extends Val with SupportedType {
-    def matches(t: Type) = types exists (t <:<)
+    lazy val types = typeOf[T]::extraTypes.toList
+    def matches(t: Type) = {
+      types exists (t <:<)
+    }
   }
 
   final case class OptionalType[T](content: SupportedType) extends Val with SupportedType {
@@ -51,8 +55,11 @@ object SupportedTypes extends Enumeration {
     override def sparkType: DataType = content.sparkType
     override def javaClass: Class[_] = content.javaClass
     override def matches(t: Type): Boolean = {
-      val TypeRef(_, _, Seq(optType)) = t
-      content matches optType
+      t match {
+        case TypeRef(_, _, Seq(optType)) =>
+          content matches optType
+        case _ => false
+      }
     }
   }
 
@@ -60,18 +67,21 @@ object SupportedTypes extends Enumeration {
 
   import scala.reflect.runtime.universe.definitions._
 
-  val Boolean   = SimpleType[scala.Boolean] (Vec.T_NUM,  BooleanType,   classOf[jl.Boolean  ], BooleanTpe, typeOf[jl.Boolean])
-  val Byte      = SimpleType[scala.Byte   ] (Vec.T_NUM,  ByteType,      classOf[jl.Byte     ], ByteTpe,    typeOf[jl.Byte])
-  val Short     = SimpleType[scala.Short  ] (Vec.T_NUM,  ShortType,     classOf[jl.Short    ], ShortTpe,   typeOf[jl.Short])
-  val Integer   = SimpleType[scala.Int    ] (Vec.T_NUM,  IntegerType,   classOf[jl.Integer  ], IntTpe,     typeOf[jl.Integer])
-  val Long      = SimpleType[scala.Long   ] (Vec.T_NUM,  LongType,      classOf[jl.Long     ], LongTpe,    typeOf[jl.Long])
-  val Float     = SimpleType[scala.Float  ] (Vec.T_NUM,  FloatType,     classOf[jl.Float    ], FloatTpe,   typeOf[jl.Float])
-  val Double    = SimpleType[scala.Double ] (Vec.T_NUM,  DoubleType,    classOf[jl.Double   ], DoubleTpe,  typeOf[jl.Double])
-  val Timestamp = SimpleType[js.Timestamp ] (Vec.T_TIME, TimestampType, classOf[js.Timestamp], typeOf[js.Timestamp])
-  val String    = SimpleType[String       ] (Vec.T_STR,  StringType,    classOf[String],       typeOf[String])
-  val UUID      = SimpleType[String       ] (Vec.T_UUID, StringType,    classOf[String],       typeOf[String])
-  val Category  = SimpleType[String       ] (Vec.T_CAT,  StringType,    classOf[String],       typeOf[String])
-  val UTF8      = SimpleType[String       ] (Vec.T_STR,  StringType,    classOf[String],       typeOf[UTF8String]) // todo
+  private val ZeroTime = new js.Timestamp(0L)
+
+  val Boolean   = SimpleType[scala.Boolean] (Vec.T_NUM,  BooleanType,   classOf[jl.Boolean  ], false,      BooleanTpe, typeOf[jl.Boolean])
+  val Byte      = SimpleType[scala.Byte   ] (Vec.T_NUM,  ByteType,      classOf[jl.Byte     ], 0.toByte,   ByteTpe,    typeOf[jl.Byte])
+  val Short     = SimpleType[scala.Short  ] (Vec.T_NUM,  ShortType,     classOf[jl.Short    ], 0.toShort,  ShortTpe,   typeOf[jl.Short])
+  val Integer   = SimpleType[scala.Int    ] (Vec.T_NUM,  IntegerType,   classOf[jl.Integer  ], 0,          IntTpe,     typeOf[jl.Integer])
+  val Long      = SimpleType[scala.Long   ] (Vec.T_NUM,  LongType,      classOf[jl.Long     ], 0L,         LongTpe,    typeOf[jl.Long])
+  val Float     = SimpleType[scala.Float  ] (Vec.T_NUM,  FloatType,     classOf[jl.Float    ], scala.Float.NaN,  FloatTpe, typeOf[jl.Float])
+  val Double    = SimpleType[scala.Double ] (Vec.T_NUM,  DoubleType,    classOf[jl.Double   ], scala.Double.NaN, DoubleTpe, typeOf[jl.Double])
+  val Timestamp = SimpleType[js.Timestamp ] (Vec.T_TIME, TimestampType, classOf[js.Timestamp], ZeroTime)
+  val String    = SimpleType[String       ] (Vec.T_STR,  StringType,    classOf[String],       null)
+  val UUID      = SimpleType[String       ] (Vec.T_UUID, StringType,    classOf[String],       null)
+  val Category  = SimpleType[String       ] (Vec.T_CAT,  StringType,    classOf[String],       null)
+  // todo(vlad): figure out if this is the right thing
+  val UTF8      = SimpleType[UTF8String   ] (Vec.T_STR,  StringType,    classOf[String],       null,       typeOf[UTF8String])
 
   private implicit def val2type(v: Value): SimpleType[_] = v.asInstanceOf[SimpleType[_]]
 
